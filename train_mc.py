@@ -56,7 +56,7 @@ from transformers.utils import PaddingStrategy, check_min_version, send_example_
 
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
-check_min_version("4.45.0.dev0")
+check_min_version("4.44.2.dev0")
 
 logger = get_logger(__name__)
 # You should update this to your particular problem to have better documentation of `model_type`
@@ -66,6 +66,13 @@ MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Finetune a transformers model on a multiple choice task")
+    parser.add_argument(
+        "--context_file", 
+        type=str, 
+        default=None,
+        required=True, 
+        help="Path to context.json file"
+    )
     parser.add_argument(
         "--dataset_name",
         type=str,
@@ -375,10 +382,10 @@ def main():
         column_names = raw_datasets["validation"].column_names
 
     # When using your own dataset or a different dataset from swag, you will probably need to change this.
-    ending_names = [f"ending{i}" for i in range(4)]
-    context_name = "sent1"
-    question_header_name = "sent2"
-    label_column_name = "label" if "label" in column_names else "labels"
+    # ending_names = [f"ending{i}" for i in range(4)]
+    # context_name = "question"
+    # question_header_name = "question"
+    # label_column_name = "relavant"
 
     # Load pretrained model and tokenizer
     #
@@ -413,9 +420,19 @@ def main():
             config=config,
             trust_remote_code=args.trust_remote_code,
         )
+        # force to be contiguous before saving
+        for param in model.parameters():
+            param.data = param.data.contiguous()
     else:
         logger.info("Training new model from scratch")
         model = AutoModelForMultipleChoice.from_config(config, trust_remote_code=args.trust_remote_code)
+    
+    contexts = None
+    if args.context_file:
+        with open(args.context_file) as f:
+            contexts = json.load(f)
+    else:
+        raise ValueError("You need to provide a context.json file")
 
     # We resize the embeddings only when necessary to avoid index errors. If you are creating a model from scratch
     # on a small vocab and want a smaller embedding size, remove this test.
@@ -428,13 +445,15 @@ def main():
     padding = "max_length" if args.pad_to_max_length else False
 
     def preprocess_function(examples):
-        first_sentences = [[context] * 4 for context in examples[context_name]]
-        question_headers = examples[question_header_name]
+        
+        first_sentences = [[context] * 4 for context in examples["question"]]   
         second_sentences = [
-            [f"{header} {examples[end][i]}" for end in ending_names] for i, header in enumerate(question_headers)
+            [f"{contexts[p]}" for p in p_list] for p_list in examples["paragraphs"]
         ]
-        labels = examples[label_column_name]
-
+        
+        labels = [p_list.index(examples["relevant"][i])  for i, p_list in enumerate(examples["paragraphs"])]
+        # print(first_sentences[0], second_sentences[0], labels[0])
+        
         # Flatten out
         first_sentences = list(chain(*first_sentences))
         second_sentences = list(chain(*second_sentences))
@@ -617,7 +636,7 @@ def main():
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.zero_grad()
-
+                # break
             # Checks if the accelerator has performed an optimization step behind the scenes
             if accelerator.sync_gradients:
                 progress_bar.update(1)
@@ -646,6 +665,7 @@ def main():
 
         eval_metric = metric.compute()
         accelerator.print(f"epoch {epoch}: {eval_metric}")
+        print("training loss : " + str(total_loss.item() / len(train_dataloader)))
 
         if args.with_tracking:
             accelerator.log(
@@ -680,6 +700,7 @@ def main():
                 output_dir = os.path.join(args.output_dir, output_dir)
             accelerator.save_state(output_dir)
 
+    
     if args.with_tracking:
         accelerator.end_training()
 

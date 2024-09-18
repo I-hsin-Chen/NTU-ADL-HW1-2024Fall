@@ -1,0 +1,14 @@
+python ./train_qa.py \
+ --context_file $1 \
+  --train_file $2 \
+  --validation_file $3 \
+  --model_type bert \
+  --model_name_or_path hfl/chinese-macbert-large \
+  --max_seq_length 512 \
+  --per_device_train_batch_size 1 \
+  --gradient_accumulation_steps 2 \
+  --learning_rate 3e-5 \
+  --num_train_epochs 3 \
+  --output_dir model/question_ans \
+  --checkpointing_steps 'epoch' \
+  --with_tracking

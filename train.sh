@@ -1,0 +1,14 @@
+python ./train_mc.py \
+  --context_file $1 \
+  --train_file $2 \
+  --validation_file $3 \
+  --model_type bert \
+  --model_name_or_path google-bert/bert-base-chinese \
+  --tokenizer_name bert-base-chinese \
+  --max_seq_length 512 \
+  --per_device_train_batch_size 1 \
+  --gradient_accumulation_steps 2 \
+  --num_train_epochs 3 \
+  --learning_rate 3e-5 \
+  --output_dir model/multiple_choice \
+  --with_tracking
