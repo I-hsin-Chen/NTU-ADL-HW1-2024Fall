@@ -1034,6 +1034,7 @@ def main():
 
                 all_start_logits.append(accelerator.gather_for_metrics(start_logits).cpu().numpy())
                 all_end_logits.append(accelerator.gather_for_metrics(end_logits).cpu().numpy())
+                # break
 
         max_len = max([x.shape[1] for x in all_start_logits])  # Get the max_length of the tensor
         VALID_LOSS.append(eval_loss.item() / len(eval_dataloader))

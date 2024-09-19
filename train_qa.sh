@@ -1,4 +1,4 @@
-python ./train_qa.py \
+python ./train/train_qa.py \
   --context_file $1 \
   --train_file $2 \
   --validation_file $3 \
@@ -8,7 +8,7 @@ python ./train_qa.py \
   --per_device_train_batch_size 2 \
   --gradient_accumulation_steps 4 \
   --learning_rate 1e-5 \
-  --num_train_epochs 10 \
+  --num_train_epochs 1 \
   --output_dir model/question_ans \
   --checkpointing_steps 'epoch' \
   --with_tracking

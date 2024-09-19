@@ -1,4 +1,4 @@
-python ./train_mc.py \
+python ./train/train_mc.py \
   --context_file $1 \
   --train_file $2 \
   --validation_file $3 \
@@ -10,5 +10,5 @@ python ./train_mc.py \
   --gradient_accumulation_steps 2 \
   --num_train_epochs 3 \
   --learning_rate 3e-5 \
-  --output_dir model/multiple_choice \
+  --output_dir ./model/multiple_choice \
   --with_tracking
