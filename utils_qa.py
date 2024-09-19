@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 def postprocess_qa_predictions(
     examples,
     features,
+    context,
     predictions: Tuple[np.ndarray, np.ndarray],
     version_2_with_negative: bool = False,
     n_best_size: int = 20,
@@ -385,7 +386,8 @@ def postprocess_qa_predictions_with_beam_search(
         predictions = sorted(prelim_predictions, key=lambda x: x["score"], reverse=True)[:n_best_size]
 
         # Use the offsets to gather the answer text in the original context.
-        context = example["context"]
+        # context = example["context"]
+        context = context_file[example["relevant"]] 
         for pred in predictions:
             offsets = pred.pop("offsets")
             pred["text"] = context[offsets[0] : offsets[1]]

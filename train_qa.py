@@ -90,6 +90,13 @@ def save_prefixed_metrics(results, output_dir, file_name: str = "all_results.jso
 def parse_args():
     parser = argparse.ArgumentParser(description="Finetune a transformers model on a Question Answering task")
     parser.add_argument(
+        "--context_file", 
+        type=str, 
+        default=None,
+        required=True, 
+        help="Path to context.json file"
+    )
+    parser.add_argument(
         "--dataset_name",
         type=str,
         default=None,
@@ -407,14 +414,12 @@ def main():
         data_files = {}
         if args.train_file is not None:
             data_files["train"] = args.train_file
-            extension = args.train_file.split(".")[-1]
         if args.validation_file is not None:
             data_files["validation"] = args.validation_file
-            extension = args.validation_file.split(".")[-1]
         if args.test_file is not None:
             data_files["test"] = args.test_file
-            extension = args.test_file.split(".")[-1]
-        raw_datasets = load_dataset(extension, data_files=data_files, field="data")
+        extension = args.train_file.split(".")[-1]
+        raw_datasets = load_dataset(extension, data_files=data_files)
     # See more about loading any type of standard or custom dataset (from files, python dict, pandas DataFrame, etc) at
     # https://huggingface.co/docs/datasets/loading_datasets.
 
@@ -531,12 +536,12 @@ def main():
             sample_index = sample_mapping[i]
             answers = examples[answer_column_name][sample_index]
             # If no answers are given, set the cls_index as answer.
-            if len(answers["start"]) == 0:
+            if answers["start"] < 0:
                 tokenized_examples["start_positions"].append(cls_index)
                 tokenized_examples["end_positions"].append(cls_index)
             else:
                 # Start/end character index of the answer in the text.
-                start_char = answers["start"][0]
+                start_char = answers["start"]
                 end_char = start_char + len(answers["text"])
 
                 # Start token index of the current span in the text.
@@ -654,12 +659,12 @@ def main():
             sample_index = sample_mapping[i]
             answers = examples[answer_column_name][sample_index]
             # If no answers are given, set the cls_index as answer.
-            if len(answers["start"]) == 0:
+            if answers["start"] < 0:
                 tokenized_examples["start_positions"].append(cls_index)
                 tokenized_examples["end_positions"].append(cls_index)
             else:
                 # Start/end character index of the answer in the text.
-                start_char = answers["start"][0]
+                start_char = answers["start"]
                 end_char = start_char + len(answers["text"])
 
                 # Start token index of the current span in the text.
@@ -780,7 +785,7 @@ def main():
             null_score_diff_threshold=args.null_score_diff_threshold,
             output_dir=args.output_dir,
             prefix=stage,
-            contex=contexts
+            context=args.context_file
         )
         # Format the result to the format the metric expects.
         if args.version_2_with_negative:
@@ -790,7 +795,9 @@ def main():
         else:
             formatted_predictions = [{"id": k, "prediction_text": v} for k, v in predictions.items()]
 
-        references = [{"id": ex["id"], "answers": ex[answer_column_name]} for ex in examples]
+        # solving KeyError: 'answer_start'
+        references = [{"id": ex["id"], "answers": [
+                    {"text": ex[answer_column_name]["text"], "answer_start": ex[answer_column_name]["start"]}]} for ex in examples]
         return EvalPrediction(predictions=formatted_predictions, label_ids=references)
 
     metric = evaluate.load("squad_v2" if args.version_2_with_negative else "squad")
@@ -850,13 +857,19 @@ def main():
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
         overrode_max_train_steps = True
 
+    # lr_scheduler = get_scheduler(
+    #     name=args.lr_scheduler_type,
+    #     optimizer=optimizer,
+    #     num_warmup_steps=args.num_warmup_steps * accelerator.num_processes,
+    #     num_training_steps=args.max_train_steps
+    #     if overrode_max_train_steps
+    #     else args.max_train_steps * accelerator.num_processes,
+    # )
     lr_scheduler = get_scheduler(
         name=args.lr_scheduler_type,
         optimizer=optimizer,
-        num_warmup_steps=args.num_warmup_steps * accelerator.num_processes,
-        num_training_steps=args.max_train_steps
-        if overrode_max_train_steps
-        else args.max_train_steps * accelerator.num_processes,
+        num_warmup_steps=args.num_warmup_steps * args.gradient_accumulation_steps,
+        num_training_steps=args.max_train_steps * args.gradient_accumulation_steps,
     )
 
     # Prepare everything with our `accelerator`.
@@ -957,6 +970,7 @@ def main():
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.zero_grad()
+                # break
 
             # Checks if the accelerator has performed an optimization step behind the scenes
             if accelerator.sync_gradients:
@@ -964,7 +978,7 @@ def main():
                 completed_steps += 1
 
             if isinstance(checkpointing_steps, int):
-                if completed_steps % checkpointing_steps == 0 and accelerator.sync_gradients:
+                if completed_steps % checkpointing_steps == 0:
                     output_dir = f"step_{completed_steps}"
                     if args.output_dir is not None:
                         output_dir = os.path.join(args.output_dir, output_dir)
@@ -996,47 +1010,47 @@ def main():
                 )
         TRAIN_LOSS.append(total_loss.item() / len(train_dataloader))
 
-    # Evaluation
-    logger.info("***** Running Evaluation *****")
-    logger.info(f"  Num examples = {len(eval_dataset)}")
-    logger.info(f"  Batch size = {args.per_device_eval_batch_size}")
+        # Evaluation
+        logger.info("***** Running Evaluation *****")
+        logger.info(f"  Num examples = {len(eval_dataset)}")
+        logger.info(f"  Batch size = {args.per_device_eval_batch_size}")
 
-    all_start_logits = []
-    all_end_logits = []
+        all_start_logits = []
+        all_end_logits = []
 
-    model.eval()
-    eval_loss = 0
-    for step, batch in enumerate(eval_dataloader):
-        with torch.no_grad():
-            outputs = model(**batch)
-            start_logits = outputs.start_logits
-            end_logits = outputs.end_logits
-            if args.with_tracking:
-                eval_loss += outputs.loss.detach().float()
+        model.eval()
+        eval_loss = 0
+        for step, batch in enumerate(eval_dataloader):
+            with torch.no_grad():
+                outputs = model(**batch)
+                start_logits = outputs.start_logits
+                end_logits = outputs.end_logits
+                if args.with_tracking:
+                    eval_loss += outputs.loss.detach().float()
 
-            if not args.pad_to_max_length:  # necessary to pad predictions and labels for being gathered
-                start_logits = accelerator.pad_across_processes(start_logits, dim=1, pad_index=-100)
-                end_logits = accelerator.pad_across_processes(end_logits, dim=1, pad_index=-100)
+                if not args.pad_to_max_length:  # necessary to pad predictions and labels for being gathered
+                    start_logits = accelerator.pad_across_processes(start_logits, dim=1, pad_index=-100)
+                    end_logits = accelerator.pad_across_processes(end_logits, dim=1, pad_index=-100)
 
-            all_start_logits.append(accelerator.gather_for_metrics(start_logits).cpu().numpy())
-            all_end_logits.append(accelerator.gather_for_metrics(end_logits).cpu().numpy())
+                all_start_logits.append(accelerator.gather_for_metrics(start_logits).cpu().numpy())
+                all_end_logits.append(accelerator.gather_for_metrics(end_logits).cpu().numpy())
 
-    max_len = max([x.shape[1] for x in all_start_logits])  # Get the max_length of the tensor
-    VALID_LOSS.append(eval_loss.item() / len(eval_dataloader))
+        max_len = max([x.shape[1] for x in all_start_logits])  # Get the max_length of the tensor
+        VALID_LOSS.append(eval_loss.item() / len(eval_dataloader))
     
-    # concatenate the numpy array
-    start_logits_concat = create_and_fill_np_array(all_start_logits, eval_dataset, max_len)
-    end_logits_concat = create_and_fill_np_array(all_end_logits, eval_dataset, max_len)
+        # concatenate the numpy array
+        start_logits_concat = create_and_fill_np_array(all_start_logits, eval_dataset, max_len)
+        end_logits_concat = create_and_fill_np_array(all_end_logits, eval_dataset, max_len)
 
-    # delete the list of numpy arrays
-    del all_start_logits
-    del all_end_logits
+        # delete the list of numpy arrays
+        del all_start_logits
+        del all_end_logits
 
-    outputs_numpy = (start_logits_concat, end_logits_concat)
-    prediction = post_processing_function(eval_examples, eval_dataset, outputs_numpy)
-    eval_metric = metric.compute(predictions=prediction.predictions, references=prediction.label_ids)
-    logger.info(f"Evaluation metrics: {eval_metric}")
-    EM.append(eval_metric['exact_match'])
+        outputs_numpy = (start_logits_concat, end_logits_concat)
+        prediction = post_processing_function(eval_examples, eval_dataset, outputs_numpy)
+        eval_metric = metric.compute(predictions=prediction.predictions, references=prediction.label_ids)
+        logger.info(f"Evaluation metrics: {eval_metric}")
+        EM.append(eval_metric['exact_match'])
 
     # Prediction
     if args.do_predict:
@@ -1090,7 +1104,6 @@ def main():
         accelerator.log(log, step=completed_steps)
 
     if args.output_dir is not None:
-        
         results = {'Exact Match': EM, 'Training Loss': TRAIN_LOSS, 'Validation Loss': VALID_LOSS}
         with open(os.path.join(args.output_dir, "metrics.json"), "w") as f:
             json.dump(results, f, indent=4)
