@@ -662,6 +662,7 @@ def main():
                 predictions=predictions,
                 references=references,
             )
+            # break
 
         eval_metric = metric.compute()
         accelerator.print(f"epoch {epoch}: {eval_metric}")
