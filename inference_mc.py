@@ -52,12 +52,6 @@ def parse_args():
         default=None,
         help="Pretrained tokenizer name or path if not the same as model_name",
     )
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        default="./output",
-        help="The output directory where the model predictions will be written.",
-    )
     args = parser.parse_args()
     return args
 
@@ -126,7 +120,7 @@ def main():
 
     ids = raw_datasets["test"]["id"]
     results = [{"id": id_, "answer": int(pred)} for id_, pred in zip(ids, all_predictions)]
-    output_file = os.path.join(args.output_dir, "mc_pred.json")
+    output_file = os.path.join("mc_pred.json")
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=4)
 

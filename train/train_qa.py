@@ -457,6 +457,9 @@ def main():
             config=config,
             trust_remote_code=args.trust_remote_code,
         )
+        # force to be contiguous before saving
+        for param in model.parameters():
+            param.data = param.data.contiguous()
     else:
         logger.info("Training new model from scratch")
         model = AutoModelForQuestionAnswering.from_config(config, trust_remote_code=args.trust_remote_code)

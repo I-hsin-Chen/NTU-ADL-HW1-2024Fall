@@ -4,9 +4,10 @@ python ./train/train_mc.py \
   --validation_file $3 \
   --model_name_or_path hfl/chinese-lert-base \
   --max_seq_length 512 \
-  --per_device_train_batch_size 1 \
-  --gradient_accumulation_steps 2 \
+  --per_device_train_batch_size 2 \
+  --gradient_accumulation_steps 4 \
   --num_train_epochs 3 \
   --learning_rate 3e-5 \
   --output_dir ./model/mc_lert_base \
+  --checkpointing_steps 'epoch' \
   --with_tracking

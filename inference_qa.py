@@ -158,7 +158,7 @@ def predict():
     test_examples = raw_datasets['test']
     
     # load predictions from multiple choice model to test dataset
-    with open("output/mc_pred.json", "r") as f:
+    with open("mc_pred.json", "r") as f:
         mc_pred = json.load(f)
     answers = [item['answer'] for item in mc_pred]
     right_paragraphs = [ps[answers[i]] for i, ps in enumerate(test_examples[paragraphs_column_name])]
@@ -321,7 +321,6 @@ def predict():
         writer.writerow([str('id'), str('answer')])
         for item in prediction:
             writer.writerow([item['id'], item['prediction_text']])
-    print(prediction)
     
     
 if __name__ == "__main__":
