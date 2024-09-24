@@ -1,6 +1,7 @@
 model/*
 data/*
-package/*
+models/*
+models.zip
 plot_output/*
 **/__pycache__/
 **/mc_pred.json

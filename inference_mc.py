@@ -123,8 +123,6 @@ def main():
     output_file = os.path.join("mc_pred.json")
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=4)
-
-    print(f"Predictions saved to {output_file}")
     
 
 if __name__ == "__main__":
