@@ -1,5 +1,7 @@
 model/*
 data/*
+package/*
+plot_output/*
 **/__pycache__/
 **/mc_pred.json
 **/qa_pred.csv
