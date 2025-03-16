@@ -1,4 +1,7 @@
-# ADL HW1
+# 2024 NTU ADL HW1
+This repository contains coursework from National Taiwan University CSIE5431: Applied Deep Learning.
+* Student: I-Hsin Chen
+* Affiliation: Graduate Institute of Networking and Multimedia, National Taiwan University
 
 ## Environment Setup
 ```
